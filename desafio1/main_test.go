@@ -1,52 +1,58 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
-	"encoding/json"
-	"strings"
-
-	"github.com/go-chi/chi/v5"
 )
 
+// helper
+
+func fazerPedido(t *testing.T, metodo, caminho string, body io.Reader, headers map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	app := setupRouter(time.Now())
+
+	req := httptest.NewRequest(metodo, caminho, body)
+	for chave, valor := range headers {
+		req.Header.Set(chave, valor)
+	}
+
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	return rec
+}
+
+// handlers tests
 
 func TestRootHandler(t *testing.T) {
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-
-	rootHandler(rec, req)
+	rec := fazerPedido(t, http.MethodGet, "/", nil, nil)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("esperava status 200, recebi %d", rec.Code)
 	}
-
 	if ct := rec.Header().Get("Content-Type"); ct != "text/plain" {
-    t.Errorf("esperava Content-Type %q, recebi %q", "text/plain", ct)	
+		t.Errorf("esperava Content-Type %q, recebi %q", "text/plain", ct)
 	}
-
-
 	if rec.Body.String() != "Ola Mundo!" {
 		t.Errorf("esperava body %q, recebi %q", "Ola Mundo!", rec.Body.String())
 	}
-
 }
 
 func TestHealthHandler(t *testing.T) {
-	startTime := time.Now().Add(-2 * time.Hour)
-	handler := makeHealthHandler(startTime)
+	app := setupRouter(time.Now().Add(-2 * time.Hour))
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
-
-	handler(rec, req)
+	app.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("esperava status 200, recebi %d", rec.Code)
 	}
-
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("esperava Content-Type %q, recebi %q", "application/json", ct)
 	}
@@ -58,7 +64,6 @@ func TestHealthHandler(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("resposta não é JSON válido: %v", err)
 	}
-
 	if body.Status != "up" {
 		t.Errorf("esperava status %q, recebi %q", "up", body.Status)
 	}
@@ -67,55 +72,35 @@ func TestHealthHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("uptime %q não é uma duração válida: %v", body.Uptime, err)
 	}
-
 	if uptime < 2*time.Hour || uptime > 2*time.Hour+time.Second {
 		t.Errorf("esperava uptime ~2h, recebi %v", uptime)
 	}
 }
 
 func TestHello(t *testing.T) {
-
-
-	req := httptest.NewRequest(http.MethodGet, "/hello/Pedro", nil)
-	rec := httptest.NewRecorder()
-
-	app := chi.NewRouter()
-	app.Get("/hello/{name}", helloHandler)
-	app.ServeHTTP(rec,req)
+	rec := fazerPedido(t, http.MethodGet, "/hello/Pedro", nil, nil)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("esperava status 200, recebi %d", rec.Code)
 	}
-
 	if rec.Body.String() != "Olá, Pedro!" {
 		t.Errorf("esperava body %q, recebi %q", "Olá, Pedro!", rec.Body.String())
 	}
 }
 
-
 func TestUserHandler(t *testing.T) {
-
-	req := httptest.NewRequest(http.MethodGet, "/user/42", nil)
-	rec := httptest.NewRecorder()
-
-	app := chi.NewRouter()
-	app.Get("/user/{id:[0-9]+}", userHandler)
-	app.ServeHTTP(rec,req)
+	rec := fazerPedido(t, http.MethodGet, "/user/42", nil, nil)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("esperava status 200, recebi %d", rec.Code)
 	}
-
 	if rec.Body.String() != "User Profile: 42" {
 		t.Errorf("esperava body %q, recebi %q", "User Profile: 42", rec.Body.String())
 	}
 }
 
 func TestSearchHandlerComPagina(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/search?q=golang&page=2", nil)
-	rec := httptest.NewRecorder()
-
-	searchHandler(rec, req)
+	rec := fazerPedido(t, http.MethodGet, "/search?q=golang&page=2", nil, nil)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("esperava status 200, recebi %d", rec.Code)
@@ -126,10 +111,7 @@ func TestSearchHandlerComPagina(t *testing.T) {
 }
 
 func TestSearchHandlerDefaultPage(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/search?q=golang", nil)
-	rec := httptest.NewRecorder()
-
-	searchHandler(rec, req)
+	rec := fazerPedido(t, http.MethodGet, "/search?q=golang", nil, nil)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("esperava status 200, recebi %d", rec.Code)
@@ -140,10 +122,7 @@ func TestSearchHandlerDefaultPage(t *testing.T) {
 }
 
 func TestSearchHandlerSemQ(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/search", nil)
-	rec := httptest.NewRecorder()
-
-	searchHandler(rec, req)
+	rec := fazerPedido(t, http.MethodGet, "/search", nil, nil)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("esperava status 400, recebi %d", rec.Code)
@@ -151,11 +130,9 @@ func TestSearchHandlerSemQ(t *testing.T) {
 }
 
 func TestEchoHandlerSucesso(t *testing.T) {
-	body := strings.NewReader(`{"payload": "teste"}`)
-	req := httptest.NewRequest(http.MethodPost, "/echo", body)
-	rec := httptest.NewRecorder()
-
-	echoHandler(rec, req)
+	rec := fazerPedido(t, http.MethodPost, "/echo",
+		strings.NewReader(`{"payload": "teste"}`),
+		map[string]string{"X-App-Token": "secret123"})
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("esperava status 200, recebi %d", rec.Code)
@@ -168,7 +145,6 @@ func TestEchoHandlerSucesso(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("resposta não é JSON válido: %v", err)
 	}
-
 	if resp.Payload != "teste" {
 		t.Errorf("payload errado: %q", resp.Payload)
 	}
@@ -178,10 +154,9 @@ func TestEchoHandlerSucesso(t *testing.T) {
 }
 
 func TestEchoHandlerBodyVazio(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(""))
-	rec := httptest.NewRecorder()
-
-	echoHandler(rec, req)
+	rec := fazerPedido(t, http.MethodPost, "/echo",
+		strings.NewReader(""),
+		map[string]string{"X-App-Token": "secret123"})
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("esperava status 400, recebi %d", rec.Code)
@@ -189,26 +164,21 @@ func TestEchoHandlerBodyVazio(t *testing.T) {
 }
 
 func TestEchoHandlerJSONInvalido(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader("isto não é JSON"))
-	rec := httptest.NewRecorder()
-
-	echoHandler(rec, req)
+	rec := fazerPedido(t, http.MethodPost, "/echo",
+		strings.NewReader("isto não é JSON"),
+		map[string]string{"X-App-Token": "secret123"})
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("esperava status 400, recebi %d", rec.Code)
 	}
 }
 
-// Testes dos middlewares de autenticação
+// Middleware tests
 
 func TestAuthMiddlewareSemToken(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(`{"payload":"x"}`))
-	rec := httptest.NewRecorder()
-
-	app := chi.NewRouter()
-	app.Use(authMiddleware)
-	app.Post("/echo", echoHandler)
-	app.ServeHTTP(rec, req)
+	rec := fazerPedido(t, http.MethodPost, "/echo",
+		strings.NewReader(`{"payload":"x"}`),
+		nil)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("esperava 401, recebi %d", rec.Code)
@@ -216,14 +186,9 @@ func TestAuthMiddlewareSemToken(t *testing.T) {
 }
 
 func TestAuthMiddlewareTokenErrado(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(`{"payload":"x"}`))
-	req.Header.Set("X-App-Token", "errado")
-	rec := httptest.NewRecorder()
-
-	app := chi.NewRouter()
-	app.Use(authMiddleware)
-	app.Post("/echo", echoHandler)
-	app.ServeHTTP(rec, req)
+	rec := fazerPedido(t, http.MethodPost, "/echo",
+		strings.NewReader(`{"payload":"x"}`),
+		map[string]string{"X-App-Token": "errado"})
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("esperava 401, recebi %d", rec.Code)
@@ -231,14 +196,9 @@ func TestAuthMiddlewareTokenErrado(t *testing.T) {
 }
 
 func TestAuthMiddlewareTokenCorreto(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(`{"payload":"x"}`))
-	req.Header.Set("X-App-Token", "secret123")
-	rec := httptest.NewRecorder()
-
-	app := chi.NewRouter()
-	app.Use(authMiddleware)
-	app.Post("/echo", echoHandler)
-	app.ServeHTTP(rec, req)
+	rec := fazerPedido(t, http.MethodPost, "/echo",
+		strings.NewReader(`{"payload":"x"}`),
+		map[string]string{"X-App-Token": "secret123"})
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("esperava 200, recebi %d", rec.Code)

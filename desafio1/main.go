@@ -125,11 +125,7 @@ func authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// main
-
-func main() {
-	startTime := time.Now()
-
+func setupRouter(startTime time.Time) http.Handler {
 	app := chi.NewRouter()
 
 	app.Use(loggingMiddleware)
@@ -145,5 +141,13 @@ func main() {
 		r.Post("/echo", echoHandler)
 	})
 
+	return app
+}
+
+// main
+
+func main() {
+	startTime := time.Now()
+	app := setupRouter(startTime)
 	http.ListenAndServe(":8080", app)
 }
