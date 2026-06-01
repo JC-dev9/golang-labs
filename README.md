@@ -10,11 +10,14 @@ Repositório dedicado ao estudo e desenvolvimento de aplicações utilizando a l
 * **Padrões:** Injeção de dependências, composição de middlewares, testes de integração de handlers.
 * **Recursos:** *Learn Go With Tests* (por @quii).
 * **Ferramentas:** Go CLI, `gopls` (Language Server).
+* **Arquitetura:** Separação de responsabilidades entre camada HTTP (handlers) e lógica de negócio (services), com erros de domínio mapeados a códigos HTTP.
+* **Segurança:** Hashing de passwords com `golang.org/x/crypto/bcrypt`, geração de IDs e tokens com `crypto/rand`.
 
 ## 📂 Estrutura do Repositório
 
 * `/hello-world` — Fundamentos de sintaxe, variáveis curtas (`:=`), constantes, estruturas condicionais (`if`/`switch`), subtests e funções públicas/privadas.
 * `/desafio1` — Servidor HTTP com `go-chi/chi/v5`: handlers, parâmetros de rota com regex, query parameters, encoding/decoding JSON, middlewares de logging e autenticação por header.
+* `/desafio2` — Serviço de autenticação em memória com separação de camadas (services e handlers), bcrypt para hashing de passwords, sessões com tokens hexadecimais, e endpoints REST para registo, login e perfil. Construído com TDD desde o serviço até aos handlers.
 
 ---
 
