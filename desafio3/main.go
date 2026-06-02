@@ -1,38 +1,66 @@
 package main
 
 import (
+	"database/sql"
+	"log"
 	"net/http"
-
-	"github.com/go-chi/chi/v5"
 
 	"desafio3/handlers"
 	"desafio3/repository"
 	"desafio3/services"
+
+	_ "modernc.org/sqlite" // O driver
 )
 
-func setupRouter(h *handlers.Handlers) http.Handler {
-	r := chi.NewRouter()
+// Helper para manter o main() limpo
+func createTables(db *sql.DB) {
+	usersTable := `
+	CREATE TABLE IF NOT EXISTS users (
+		id TEXT PRIMARY KEY,
+		username TEXT UNIQUE,
+		password TEXT,
+		created_at DATETIME
+	);`
 
-	r.Post("/api/user/register", h.Register)
-	r.Post("/api/user/login", h.Login)
-	r.Get("/api/user/profile", h.Profile)
+	sessionsTable := `
+	CREATE TABLE IF NOT EXISTS sessions (
+		token TEXT PRIMARY KEY,
+		user_id TEXT,
+		created_at DATETIME
+	);`
 
-	return r
+	if _, err := db.Exec(usersTable); err != nil {
+		log.Fatalf("Erro ao criar tabela users: %v", err)
+	}
+	if _, err := db.Exec(sessionsTable); err != nil {
+		log.Fatalf("Erro ao criar tabela sessions: %v", err)
+	}
 }
 
 func main() {
+	db, err := sql.Open("sqlite", "auth.db")
+	if err != nil {
+		log.Fatalf("Erro ao ligar à base de dados: %v", err)
+	}
+	defer db.Close()
+
+	createTables(db)
+
+	// Criar os repositórios reais que usam SQLite
+	userRepo := repository.NewSQLiteUserRepository(db)
+	sessionRepo := repository.NewSQLiteSessionRepository(db)
 	
-	// No teu main.go, troca o services.NewAuthService() por:
-	userRepo := repository.NewMemoryUserRepository()
-	sessionRepo := repository.NewMemorySessionRepository()
 	authService := services.NewAuthService(userRepo, sessionRepo)
 	
-	// bootstrap do utilizador admin
-	if _, err := authService.Register("admin", "password123"); err != nil {
-		panic(err)
-	}
-
 	h := handlers.NewHandlers(authService)
-	app := setupRouter(h)
-	http.ListenAndServe(":8080", app)
+
+	app := http.NewServeMux()
+	app.HandleFunc("/api/user/register", h.Register)
+	app.HandleFunc("/api/user/login", h.Login)
+	app.HandleFunc("/api/user/profile", h.Profile)
+
+	log.Println("Servidor a correr na porta 8080 com base de dados SQLite")
+	if err := http.ListenAndServe(":8080", app); err != nil {
+		log.Fatalf("Erro ao iniciar servidor: %v", err)
+	}
 }
