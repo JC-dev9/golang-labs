@@ -55,13 +55,20 @@ func main() {
 	h := handlers.NewHandlers(authService)
 
 	app := http.NewServeMux()
-	app.HandleFunc("/api/user/register", h.Register)
-	app.HandleFunc("/api/user/login", h.Login)
-	app.HandleFunc("/api/user/profile", h.Profile)
-	app.HandleFunc("/api/user/logout", h.Logout)
-	app.HandleFunc("/api/user/all", h.ListUsers)
+	
+	// Rotas de Registo
+	app.HandleFunc("GET /user/register", h.RegisterGET)
+	app.HandleFunc("POST /user/register", h.RegisterPOST)
 
-	log.Println("Servidor a correr na porta 8080 com base de dados SQLite")
+	// Rotas de Login
+	app.HandleFunc("GET /user/login", h.LoginGET)
+	app.HandleFunc("POST /user/login", h.LoginPOST)
+
+	// Rotas Protegidas
+	app.HandleFunc("GET /user/profile", h.Profile)
+	app.HandleFunc("POST /user/logout", h.Logout)
+
+	log.Println("Servidor web a correr em http://localhost:8080")
 	if err := http.ListenAndServe(":8080", app); err != nil {
 		log.Fatalf("Erro ao iniciar servidor: %v", err)
 	}

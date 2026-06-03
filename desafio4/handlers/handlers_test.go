@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -13,6 +13,13 @@ import (
 
 func setupTestHandlers(t *testing.T) *Handlers {
 	t.Helper()
+	
+	// Verifica primeiro se já consegue ver a pasta "templates".
+	// Só recua uma pasta se a "templates" não estiver visível.
+	if _, err := os.Stat("templates"); os.IsNotExist(err) {
+		_ = os.Chdir("..") 
+	}
+
 	userRepo := repository.NewMemoryUserRepository()
 	sessionRepo := repository.NewMemorySessionRepository()
 	service := services.NewAuthService(userRepo, sessionRepo)
@@ -20,240 +27,168 @@ func setupTestHandlers(t *testing.T) *Handlers {
 	return NewHandlers(service)
 }
 
-func TestRegisterSucesso(t *testing.T) {
-	h := setupTestHandlers(t)
+func TestRegister(t *testing.T) {
+	t.Run("GET - Mostra formulário de registo", func(t *testing.T) {
+		h := setupTestHandlers(t)
+		req := httptest.NewRequest(http.MethodGet, "/user/register", nil)
+		rec := httptest.NewRecorder()
 
-	body := strings.NewReader(`{"username":"intern1","password":"safe-password"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/user/register", body)
-	rec := httptest.NewRecorder()
-	h.Register(rec, req)
+		h.RegisterGET(rec, req)
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("esperava 201, recebi %d", rec.Code)
-	}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("esperava 200 OK, recebi %d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "<form action=\"/user/register\" method=\"POST\">") {
+			t.Error("a página não contém o formulário correto")
+		}
+	})
 
-	var resp struct {
-		ID        string `json:"id"`
-		Username  string `json:"username"`
-		CreatedAt string `json:"created_at"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("resposta não é JSON válido: %v", err)
-	}
+	t.Run("POST - Sucesso redireciona para login", func(t *testing.T) {
+		h := setupTestHandlers(t)
+		body := strings.NewReader("username=intern1&password=safe-password")
+		req := httptest.NewRequest(http.MethodPost, "/user/register", body)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
 
-	if resp.Username != "intern1" {
-		t.Errorf("esperava username %q, recebi %q", "intern1", resp.Username)
+		h.RegisterPOST(rec, req)
 
-	}
-	if len(resp.ID) != 8 {
-		t.Errorf("esperava ID com 8 caracteres, recebi %d", len(resp.ID))
-	}
-	if resp.CreatedAt == "" {
-		t.Error("created_at está vazio")
-	}
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("esperava redirecionamento (303), recebi %d", rec.Code)
+		}
+		if rec.Header().Get("Location") != "/user/login" {
+			t.Errorf("não redirecionou para o login, foi para: %s", rec.Header().Get("Location"))
+		}
+	})
+
+	t.Run("POST - Username já existe mostra erro na página", func(t *testing.T) {
+		h := setupTestHandlers(t)
+		_, _ = h.Service.Register("intern1", "safe-password")
+
+		body := strings.NewReader("username=intern1&password=outra-password")
+		req := httptest.NewRequest(http.MethodPost, "/user/register", body)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+
+		h.RegisterPOST(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("esperava 200 OK, recebi %d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "username já existe") {
+			t.Error("a página não mostrou a mensagem de erro correta")
+		}
+	})
 }
 
-func TestRegisterDuplicado(t *testing.T) {
-	h := setupTestHandlers(t)
+func TestLogin(t *testing.T) {
+	t.Run("GET - Mostra formulário de login", func(t *testing.T) {
+		h := setupTestHandlers(t)
+		req := httptest.NewRequest(http.MethodGet, "/user/login", nil)
+		rec := httptest.NewRecorder()
 
-	if _, err := h.Service.Register("intern1", "safe-password"); err != nil {
-		t.Fatalf("seed falhou: %v", err)
-	}
+		h.LoginGET(rec, req)
 
-	body := strings.NewReader(`{"username":"intern1","password":"outra-password"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/user/register", body)
-	rec := httptest.NewRecorder()
-	h.Register(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("esperava 200 OK, recebi %d", rec.Code)
+		}
+	})
 
-	if rec.Code != http.StatusConflict {
-		t.Errorf("esperava 409, recebi %d", rec.Code)
-	}
+	t.Run("POST - Sucesso redireciona para perfil", func(t *testing.T) {
+		h := setupTestHandlers(t)
+		_, _ = h.Service.Register("intern1", "safe-password")
+
+		body := strings.NewReader("username=intern1&password=safe-password")
+		req := httptest.NewRequest(http.MethodPost, "/user/login", body)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+
+		h.LoginPOST(rec, req)
+
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("esperava redirecionamento (303), recebi %d", rec.Code)
+		}
+		if !strings.HasPrefix(rec.Header().Get("Location"), "/user/profile?token=") {
+			t.Errorf("não redirecionou para o perfil com o token. Location: %s", rec.Header().Get("Location"))
+		}
+	})
+
+	t.Run("POST - Credenciais inválidas mostram erro", func(t *testing.T) {
+		h := setupTestHandlers(t)
+		_, _ = h.Service.Register("intern1", "safe-password")
+
+		body := strings.NewReader("username=intern1&password=errada")
+		req := httptest.NewRequest(http.MethodPost, "/user/login", body)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+
+		h.LoginPOST(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("esperava 200 OK (re-renderização), recebi %d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "Credenciais inválidas") {
+			t.Error("a página não mostrou a mensagem de erro")
+		}
+	})
 }
 
-func TestRegisterUsernameCurto(t *testing.T) {
-	h := setupTestHandlers(t)
+func TestProfile(t *testing.T) {
+	t.Run("GET - Sucesso renderiza perfil", func(t *testing.T) {
+		h := setupTestHandlers(t)
+		_, _ = h.Service.Register("intern1", "safe-password")
+		token, _ := h.Service.Login("intern1", "safe-password")
 
-	body := strings.NewReader(`{"username":"ab","password":"safe-password"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/user/register", body)
-	rec := httptest.NewRecorder()
-	h.Register(rec, req)
+		req := httptest.NewRequest(http.MethodGet, "/user/profile?token="+token, nil)
+		rec := httptest.NewRecorder()
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("esperava 400, recebi %d", rec.Code)
-	}
+		h.Profile(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("esperava 200 OK, recebi %d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "Bem-vindo, intern1!") {
+			t.Error("a página não renderizou o nome do utilizador")
+		}
+	})
+
+	t.Run("GET - Sem token redireciona para login", func(t *testing.T) {
+		h := setupTestHandlers(t)
+		req := httptest.NewRequest(http.MethodGet, "/user/profile", nil)
+		rec := httptest.NewRecorder()
+
+		h.Profile(rec, req)
+
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("esperava redirecionamento (303), recebi %d", rec.Code)
+		}
+		if rec.Header().Get("Location") != "/user/login" {
+			t.Error("não redirecionou para a página de login")
+		}
+	})
 }
 
-func TestRegisterJSONInvalido(t *testing.T) {
-	h := setupTestHandlers(t)
+func TestLogout(t *testing.T) {
+	t.Run("POST - Apaga sessão e redireciona", func(t *testing.T) {
+		h := setupTestHandlers(t)
+		_, _ = h.Service.Register("intern1", "safe-password")
+		token, _ := h.Service.Login("intern1", "safe-password")
 
-	body := strings.NewReader(`{"username": "intern1", "password":`)
-	req := httptest.NewRequest(http.MethodPost, "/api/user/register", body)
-	rec := httptest.NewRecorder()
-	h.Register(rec, req)
+		// Simula o envio do token no corpo da requisição, como se fosse um formulário de logout
+		body := strings.NewReader("token=" + token)
+		req := httptest.NewRequest(http.MethodPost, "/user/logout", body)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("esperava 400, recebi %d", rec.Code)
-	}
-}
+		h.Logout(rec, req)
 
-func TestLoginSucesso(t *testing.T) {
-	h := setupTestHandlers(t)
-
-	if _, err := h.Service.Register("intern1", "safe-password"); err != nil {
-		t.Fatalf("seed falhou: %v", err)
-	}
-
-	body := strings.NewReader(`{"username":"intern1","password":"safe-password"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/user/login", body)
-	rec := httptest.NewRecorder()
-	h.Login(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("esperava 200, recebi %d", rec.Code)
-	}
-
-	var resp struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("resposta não é JSON válido: %v", err)
-	}
-
-	if resp.Token == "" {
-		t.Error("token está vazio")
-	}
-}
-
-func TestLoginCredenciaisInvalidas(t *testing.T) {
-	h := setupTestHandlers(t)
-
-	if _, err := h.Service.Register("intern1", "safe-password"); err != nil {
-		t.Fatalf("seed falhou: %v", err)
-	}
-
-	body := strings.NewReader(`{"username":"intern1","password":"errada"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/user/login", body)
-	rec := httptest.NewRecorder()
-	h.Login(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("esperava 401, recebi %d", rec.Code)
-	}
-}
-
-func TestProfileSucesso(t *testing.T) {
-	h := setupTestHandlers(t)
-
-	if _, err := h.Service.Register("intern1", "safe-password"); err != nil {
-		t.Fatalf("seed falhou: %v", err)
-	}
-	token, err := h.Service.Login("intern1", "safe-password")
-	if err != nil {
-		t.Fatalf("login seed falhou: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
-	req.Header.Set("X-Session-Token", token)
-	rec := httptest.NewRecorder()
-	h.Profile(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("esperava 200, recebi %d", rec.Code)
-	}
-
-	var resp struct {
-		ID        string `json:"id"`
-		Username  string `json:"username"`
-		CreatedAt string `json:"created_at"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("resposta não é JSON válido: %v", err)
-	}
-
-	if resp.Username != "intern1" {
-		t.Errorf("esperava username %q, recebi %q", "intern1", resp.Username)
-	}
-}
-
-func TestProfileSemToken(t *testing.T) {
-	h := setupTestHandlers(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
-	rec := httptest.NewRecorder()
-	h.Profile(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("esperava 401, recebi %d", rec.Code)
-	}
-}
-
-func TestProfileTokenInvalido(t *testing.T) {
-	h := setupTestHandlers(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
-	req.Header.Set("X-Session-Token", "token-falso")
-	rec := httptest.NewRecorder()
-	h.Profile(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("esperava 401, recebi %d", rec.Code)
-	}
-}
-
-func TestLogoutSucesso(t *testing.T) {
-	h := setupTestHandlers(t)
-	_, _ = h.Service.Register("juan", "safe-password")
-	token, _ := h.Service.Login("juan", "safe-password")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/user/logout", nil)
-	req.Header.Set("X-Session-Token", token)
-	rec := httptest.NewRecorder()
-	
-	h.Logout(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("esperava 200, recebi %d", rec.Code)
-	}
-}
-
-func TestLogoutSemToken(t *testing.T) {
-	h := setupTestHandlers(t)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/user/logout", nil)
-	rec := httptest.NewRecorder()
-	
-	h.Logout(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("esperava 401, recebi %d", rec.Code)
-	}
-}
-
-func TestListUsersSucesso(t *testing.T) {
-	h := setupTestHandlers(t)
-	_, _ = h.Service.Register("juan", "safe-password")
-	token, _ := h.Service.Login("juan", "safe-password")
-
-	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
-	req.Header.Set("X-Session-Token", token)
-	rec := httptest.NewRecorder()
-	
-	h.ListUsers(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("esperava 200, recebi %d", rec.Code)
-	}
-}
-
-func TestListUsersSemToken(t *testing.T) {
-	h := setupTestHandlers(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
-	rec := httptest.NewRecorder()
-	
-	h.ListUsers(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("esperava 401, recebi %d", rec.Code)
-	}
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("esperava redirecionamento (303), recebi %d", rec.Code)
+		}
+		
+		// Verifica se a sessão foi realmente apagada
+		_, err := h.Service.GetUserByToken(token)
+		if err == nil {
+			t.Error("o logout não apagou a sessão do repositório")
+		}
+	})
 }

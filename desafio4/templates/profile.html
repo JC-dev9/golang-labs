@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Perfil</title>
+</head>
+<body style="font-family: sans-serif; max-width: 400px; margin: 40px auto;">
+    <h2>Bem-vindo, {{.User.Username}}!</h2>
+    
+    <div style="background-color: #f1f3f4; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+        <p><strong>ID:</strong> {{.User.ID}}</p>
+        <p><strong>Membro desde:</strong> {{.User.CreatedAt.Format "02/01/2006 15:04"}}</p>
+    </div>
+
+    <form action="/user/logout" method="POST">
+        <input type="hidden" name="token" value="{{.Token}}">
+        <button type="submit" style="background-color: #d93025; color: white; border: none; padding: 10px 20px; cursor: pointer; width: 100%;">
+            Terminar Sessão
+        </button>
+    </form>
+</body>
+</html>

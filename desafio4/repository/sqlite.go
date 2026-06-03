@@ -52,7 +52,32 @@ func (s *SQLiteUserRepository) FindByID(id string) (User, error) {
 }
 
 func (s *SQLiteUserRepository) FindAll() ([]User, error) {
-	return nil, errors.New("não implementado")
+
+	query := `SELECT id, username, password, created_at FROM users`
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var users []User
+
+	for rows.Next() {
+		var u User
+
+		err := rows.Scan(&u.ID, &u.Username, &u.Password, &u.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
 
 // repositório de sessões 
