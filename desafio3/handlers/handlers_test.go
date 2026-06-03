@@ -199,3 +199,61 @@ func TestProfileTokenInvalido(t *testing.T) {
 		t.Errorf("esperava 401, recebi %d", rec.Code)
 	}
 }
+
+func TestLogoutSucesso(t *testing.T) {
+	h := setupTestHandlers(t)
+	_, _ = h.Service.Register("juan", "safe-password")
+	token, _ := h.Service.Login("juan", "safe-password")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/user/logout", nil)
+	req.Header.Set("X-Session-Token", token)
+	rec := httptest.NewRecorder()
+	
+	h.Logout(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("esperava 200, recebi %d", rec.Code)
+	}
+}
+
+func TestLogoutSemToken(t *testing.T) {
+	h := setupTestHandlers(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/user/logout", nil)
+	rec := httptest.NewRecorder()
+	
+	h.Logout(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("esperava 401, recebi %d", rec.Code)
+	}
+}
+
+func TestListUsersSucesso(t *testing.T) {
+	h := setupTestHandlers(t)
+	_, _ = h.Service.Register("juan", "safe-password")
+	token, _ := h.Service.Login("juan", "safe-password")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	req.Header.Set("X-Session-Token", token)
+	rec := httptest.NewRecorder()
+	
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("esperava 200, recebi %d", rec.Code)
+	}
+}
+
+func TestListUsersSemToken(t *testing.T) {
+	h := setupTestHandlers(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	rec := httptest.NewRecorder()
+	
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("esperava 401, recebi %d", rec.Code)
+	}
+}

@@ -70,20 +70,18 @@ func (s *AuthService) Register(username, password string) (repository.User, erro
 
 func (s *AuthService) Login(username, password string) (string, error) {
 	
-	// Buscar o user pelo username
 	user, err := s.userRepo.FindByUsername(username)
 	if err != nil {
 		return "", ErrUnauthorized
 	}
 
-	// A password em hash agora está DENTRO do user:
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
 		return "", ErrUnauthorized
 	}
 
 	token := generateRandomHex(16)
 	
-	// Criar e guardar a sessão com o repositório:
+	// Criar e guardar a sessão com o repositório
 	novaSessao := repository.Session{
 		Token:     token,
 		UserID:    user.ID,
@@ -99,17 +97,42 @@ func (s *AuthService) Login(username, password string) (string, error) {
 }
 
 func (s *AuthService) GetUserByToken(token string) (repository.User, error) {
-	// Buscar a sessão pelo token:
+
 	sessao, err := s.sessionRepo.FindByToken(token)
-	if err != nil { // Se não encontrar a sessão, o token é inválido
+	if err != nil {
 		return repository.User{}, ErrUnauthorized
 	}
 
-	// Se a sessão é válida, vai usar o UserID da sessão para buscar o utilizador:
 	user, err := s.userRepo.FindByID(sessao.UserID)
 	if err != nil {
 		return repository.User{}, ErrUnauthorized
 	}
 
 	return user, nil
+}
+
+func (s *AuthService) Logout(token string) error {
+
+	// Verificar se a sessão existe
+	_, err := s.sessionRepo.FindByToken(token)
+	if err != nil {
+		return ErrUnauthorized
+	}
+
+	err = s.sessionRepo.DeleteByToken(token)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *AuthService) ListUsers(token string) ([]repository.User, error) {
+	
+	_, err := s.sessionRepo.FindByToken(token)
+	if err != nil {
+		return nil, ErrUnauthorized
+	}
+
+	return s.userRepo.FindAll()
 }

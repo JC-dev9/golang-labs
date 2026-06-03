@@ -58,6 +58,8 @@ func main() {
 	app.HandleFunc("/api/user/register", h.Register)
 	app.HandleFunc("/api/user/login", h.Login)
 	app.HandleFunc("/api/user/profile", h.Profile)
+	app.HandleFunc("/api/user/logout", h.Logout)
+	app.HandleFunc("/api/user/all", h.ListUsers)
 
 	log.Println("Servidor a correr na porta 8080 com base de dados SQLite")
 	if err := http.ListenAndServe(":8080", app); err != nil {

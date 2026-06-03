@@ -52,7 +52,6 @@ func (s *SQLiteUserRepository) FindByID(id string) (User, error) {
 }
 
 func (s *SQLiteUserRepository) FindAll() ([]User, error) {
-	// Fica vazio por agora
 	return nil, errors.New("não implementado")
 }
 

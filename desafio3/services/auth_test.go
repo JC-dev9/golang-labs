@@ -164,3 +164,51 @@ func TestTokenValido(t *testing.T) {
 		t.Errorf("esperava username %q, recebi %q", "juan", user.Username)
 	}
 }
+
+func TestLogoutSucesso(t *testing.T) {
+	service := setupTestService(t)
+	_, _ = service.Register("juan", "password123")
+	token, _ := service.Login("juan", "password123")
+
+	err := service.Logout(token)
+	if err != nil {
+		t.Fatalf("Logout falhou: %v", err)
+	}
+
+	_, err = service.GetUserByToken(token)
+	if err == nil {
+		t.Fatal("Esperava erro ao usar token apagado, não recebi")
+	}
+}
+
+func TestLogoutTokenInvalido(t *testing.T) {
+	service := setupTestService(t)
+	err := service.Logout("token-inventado")
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Errorf("Esperava ErrUnauthorized, recebi: %v", err)
+	}
+}
+
+func TestListUsersSucesso(t *testing.T) {
+	service := setupTestService(t)
+	_, _ = service.Register("admin", "pass1")
+	_, _ = service.Register("user2", "pass2")
+	token, _ := service.Login("admin", "pass1")
+
+	users, err := service.ListUsers(token)
+	if err != nil {
+		t.Fatalf("ListUsers falhou: %v", err)
+	}
+
+	if len(users) != 2 {
+		t.Errorf("Esperava 2 utilizadores, recebi %d", len(users))
+	}
+}
+
+func TestListUsersTokenInvalido(t *testing.T) {
+	service := setupTestService(t)
+	_, err := service.ListUsers("token-falso")
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Errorf("Esperava ErrUnauthorized, recebi: %v", err)
+	}
+}

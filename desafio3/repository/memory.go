@@ -40,7 +40,12 @@ func (m *MemoryUserRepository) FindByID(id string) (User, error) {
 }
 
 func (m *MemoryUserRepository) FindAll() ([]User, error) {
-	return nil, errors.New("não implementado")
+	var users []User
+	
+	for _, user := range m.users {
+		users = append(users, user)
+	}
+	return users, nil
 }
 
 
@@ -77,3 +82,4 @@ func (m *MemorySessionRepository) DeleteByToken(token string) error {
 	delete(m.sessions, token)
 	return nil 
 }
+
