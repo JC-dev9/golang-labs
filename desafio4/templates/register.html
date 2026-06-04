@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Registo</title>
+</head>
+<body style="font-family: sans-serif; max-width: 400px; margin: 40px auto;">
+    <h2>Criar Conta</h2>
+    
+    {{if .Error}}
+        <p style="color: #d93025; font-weight: bold;">{{.Error}}</p>
+    {{end}}
+
+    <form action="/user/register" method="POST">
+        <div style="margin-bottom: 15px;">
+            <label for="username">Username:</label><br>
+            <input type="text" id="username" name="username" required style="width: 100%; padding: 8px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label for="password">Password:</label><br>
+            <input type="password" id="password" name="password" required style="width: 100%; padding: 8px;">
+        </div>
+        <button type="submit" style="width: 100%; padding: 10px; cursor: pointer;">Registar</button>
+    </form>
+    
+    <p style="text-align: center; margin-top: 20px;">
+        Já tem conta? <a href="/user/login">Faça Login</a>
+    </p>
+</body>
+</html>
